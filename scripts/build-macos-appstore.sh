@@ -42,6 +42,11 @@ security find-identity -v -p codesigning | grep -qF "$APPLE_SIGNING_IDENTITY" \
 echo "==> Adding Rust targets for the universal build"
 rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
+# The bundler expects every [[bin]] in Cargo.toml to exist, standalone-server
+# included, and it is not built by the appstore-mode feature set.
+echo "==> Pre-building standalone-server (the bundler requires it)"
+bash scripts/prebuild-standalone-server.sh universal
+
 echo "==> Building the App Store variant (sandboxed, no self-updater)"
 # tauri:build:appstore pins --no-default-features --features appstore-mode, so
 # tauri-plugin-updater is left out of the binary entirely; Apple rejects apps

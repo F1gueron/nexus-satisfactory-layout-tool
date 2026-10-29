@@ -60,6 +60,11 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # The bundler expects every [[bin]] in Cargo.toml to exist, including
+      # standalone-server, which a default-features build never compiles.
+      - name: Pre-build standalone-server (required by the Tauri bundler)
+        run: bash scripts/prebuild-standalone-server.sh universal
+
       - name: Build universal .dmg
         run: |
           set -euo pipefail

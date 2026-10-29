@@ -84,6 +84,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      # Same requirement the Windows job has: the bundler expects every [[bin]]
+      # in Cargo.toml to exist, standalone-server included, and a universal app
+      # needs a universal copy of it.
+      - name: Pre-build standalone-server (required by the Tauri bundler)
+        run: bash scripts/prebuild-standalone-server.sh universal
+
       # Builds one binary that runs natively on both Apple Silicon and Intel,
       # so there is a single .dmg for users to choose from.
       #

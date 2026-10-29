@@ -53,6 +53,16 @@ fi
 step "Installing dependencies (this is cached after the first run)"
 npm ci
 
+# The Tauri bundler expects every [[bin]] in Cargo.toml to exist, and
+# standalone-server is not built by a default-features build. Without this the
+# bundle step fails right at the end, after all the slow compiling.
+step "Pre-building standalone-server (the bundler requires it)"
+if [ "$UNIVERSAL" = "1" ]; then
+  bash scripts/prebuild-standalone-server.sh universal
+else
+  bash scripts/prebuild-standalone-server.sh native
+fi
+
 step "Building — the first build compiles the Rust core and takes a while"
 if [ "$UNIVERSAL" = "1" ]; then
   npm run tauri:build:macos:universal
