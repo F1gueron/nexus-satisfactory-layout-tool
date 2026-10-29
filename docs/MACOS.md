@@ -56,11 +56,11 @@ The `.dmg` lands in
 
 ### From CI, without a Mac
 
-> **Check Actions is enabled first.** GitHub disables Actions by default on
-> forked repositories, and this repository is a fork — so no workflow here has
-> ever run. Turn it on under *Settings → Actions → General*, or with the
-> "I understand my workflows, go ahead and enable them" button on the Actions
-> tab. Until then neither of the workflows below can produce anything.
+> **`release.yml` has never run.** It only triggers on a `v*` tag, and no tag
+> has been pushed, so the first release you cut will also be that workflow's
+> first execution — budget for a round of fixes rather than assuming it works.
+> `build-macos.yml` is the safe way to shake the macOS build out beforehand,
+> since it publishes nothing.
 
 Two separate workflows, deliberately:
 
