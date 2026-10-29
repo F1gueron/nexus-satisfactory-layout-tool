@@ -23,7 +23,8 @@
         "decorations": true,
         "transparent": false,
         "skipTaskbar": false,
-        "theme": "Dark"
+        "theme": "Dark",
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-gpu-rasterization"
       }
     ],
     "security": {

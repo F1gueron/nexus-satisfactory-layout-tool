@@ -53,7 +53,6 @@
       "rpm": {
         "epoch": 0,
         "release": "1",
-        "license": "MIT",
         "depends": [
           "gtk3",
           "webkit2gtk3"
