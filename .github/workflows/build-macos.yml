@@ -61,10 +61,31 @@ jobs:
         run: npm ci
 
       - name: Build universal .dmg
-        run: npm run tauri:build:macos:universal
+        run: |
+          set -euo pipefail
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            npm run tauri:build:macos:universal
+          else
+            # Without the updater key the bundler cannot sign the .app.tar.gz,
+            # so drop the updater artifacts rather than failing: this workflow
+            # exists to answer "does the Mac app build and bundle", and
+            # release.yml is where updater signing actually has to work.
+            echo "::warning title=No updater signing key::Building without updater artifacts. The .dmg is still installable; set TAURI_SIGNING_PRIVATE_KEY to exercise the full release path."
+            jq '.bundle.createUpdaterArtifacts = false' \
+              src-tauri/tauri.macos.conf.json > src-tauri/tauri.macos.ci.conf.json
+            npx tauri build \
+              --config src-tauri/tauri.macos.ci.conf.json \
+              --target universal-apple-darwin
+          fi
         env:
-          # Signing is optional here. Unset secrets produce a working unsigned
-          # build; see docs/MACOS.md for what that means for users.
+          # tauri.macos.conf.json sets createUpdaterArtifacts, and the base
+          # config carries an updater pubkey, so the bundler signs the
+          # .app.tar.gz and refuses to build without the matching private key.
+          # Same secret the release workflow uses.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Apple signing is optional here. Unset secrets produce a working
+          # unsigned build; see docs/MACOS.md for what that means for users.
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
