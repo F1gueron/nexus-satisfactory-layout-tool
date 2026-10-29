@@ -26,9 +26,18 @@ required-features = ["standalone"]
 # Note: standalone-server-complete removed - file doesn't exist
 
 [features]
-default = ["tauri-mode"]
-tauri-mode = ["dep:tauri", "dep:tauri-plugin-log", "dep:tauri-plugin-fs", "dep:tauri-plugin-dialog", "dep:tauri-plugin-updater", "dep:tauri-plugin-process", "dep:tauri-build"]
+default = ["tauri-mode", "self-updater"]
+tauri-mode = ["dep:tauri", "dep:tauri-plugin-log", "dep:tauri-plugin-fs", "dep:tauri-plugin-dialog", "dep:tauri-plugin-process", "dep:tauri-build"]
 standalone = []
+
+# In-app updating against GitHub Releases. On by default, and required for the
+# .dmg / .exe builds that ship from the Releases page.
+self-updater = ["dep:tauri-plugin-updater"]
+
+# Mac App Store build: everything in tauri-mode, but without the self-updater,
+# which Apple's review guidelines prohibit. Build with
+# `--no-default-features --features appstore-mode`. See docs/MACOS.md.
+appstore-mode = ["tauri-mode"]
 
 [build-dependencies]
 tauri-build = { version = "2.3.1", features = [], optional = true }

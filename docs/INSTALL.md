@@ -60,22 +60,33 @@ If not installed, the installer will download it automatically.
 
 ### Download
 Download the latest macOS installer from the [Releases page](https://github.com/HandleConsolidated/nexus-satisfactory-layout-tool/releases):
-- **DMG**: `Satisfactory_Layout_Tool_x.x.x_x64.dmg` (Intel)
-- **DMG**: `Satisfactory_Layout_Tool_x.x.x_aarch64.dmg` (Apple Silicon)
+- **DMG**: `Satisfactory_Layout_Tool_x.x.x_universal.dmg`
+
+One download covers both Apple Silicon (M1/M2/M3/M4) and Intel Macs — it is a
+universal binary, so there is no architecture to choose.
 
 ### Installation Steps
-1. Download the appropriate DMG for your Mac:
-   - Intel Mac: Download the `x64` version
-   - Apple Silicon (M1/M2/M3): Download the `aarch64` version
+1. Download the DMG
 2. Open the DMG file
 3. Drag the app to the Applications folder
 4. Eject the DMG
 
 ### First Launch (Gatekeeper)
-The app is not yet notarized, so macOS Gatekeeper may block the first launch:
+Unless the release was signed with an Apple Developer certificate, macOS
+Gatekeeper blocks the first launch — it may say the developer "cannot be
+verified", or that the app "is damaged and should be moved to the Bin". The app
+is fine; macOS flags everything downloaded from outside the App Store that
+isn't notarized.
+
+The quickest way through:
+
+1. **Right-click** (or Control-click) the app in Applications and choose
+   **Open**, then confirm. Double-clicking will not offer this option.
+
+If that doesn't appear, use System Settings instead:
 
 1. Try to open the app normally
-2. If blocked, go to **System Settings > Privacy & Security**
+2. Go to **System Settings > Privacy & Security**
 3. Scroll down to find the blocked app message
 4. Click **"Open Anyway"**
 5. Confirm in the dialog
@@ -84,6 +95,10 @@ The app is not yet notarized, so macOS Gatekeeper may block the first launch:
 ```bash
 xattr -cr /Applications/Satisfactory\ Layout\ Tool.app
 ```
+
+You only need to do this once. Maintainers: see
+[docs/MACOS.md](MACOS.md) for how to sign and notarize releases so this step
+disappears for users.
 
 ### Uninstallation
 - Drag the app from Applications to Trash

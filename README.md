@@ -54,7 +54,7 @@ If this tool saves you time, please consider supporting development:
 | Platform | Pick                       |
 | -------- | -------------------------- |
 | Windows  | `.exe` installer or portable `.zip` |
-| macOS    | `.dmg`                     |
+| macOS    | `.dmg` (universal — Apple Silicon + Intel) |
 | Linux    | `.AppImage` / `.deb` / `.rpm` |
 
 No account, no key, nothing to configure. Full install guide → [docs/INSTALL.md](docs/INSTALL.md)

@@ -63,6 +63,78 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/msi/*.msi.sig
 
+  build-macos:
+    name: Build .dmg (macOS universal)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # Builds one binary that runs natively on both Apple Silicon and Intel,
+      # so there is a single .dmg for users to choose from.
+      #
+      # Signing and notarization are driven entirely by the secrets below. With
+      # none of them set the job still succeeds and produces a working but
+      # UNSIGNED .dmg, which Gatekeeper will block on first launch until the
+      # user right-click-opens it (see docs/MACOS.md). Set the Apple secrets to
+      # get a .dmg that opens with a normal double-click.
+      - name: Build Tauri app (universal)
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --config src-tauri/tauri.macos.conf.json --target universal-apple-darwin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing (separate from Apple signing).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Apple "Developer ID Application" cert, exported as a base64 .p12.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          # Notarization credentials (Apple ID + app-specific password).
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Report signing status
+        run: |
+          APP=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP" ]; then
+            echo "No .app bundle found" && exit 1
+          fi
+          echo "Bundle: $APP"
+          codesign -dv --verbose=2 "$APP" 2>&1 || true
+          echo "--- Gatekeeper assessment ---"
+          if spctl -a -vvv -t install "$APP" 2>&1; then
+            echo "SIGNED AND ACCEPTED: this .dmg will open with a normal double-click."
+          else
+            echo "::warning title=Unsigned macOS build::The .dmg is unsigned/un-notarized. It works, but macOS will block it on first launch until the user right-click-opens it. Add the APPLE_* secrets to fix this."
+          fi
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
+
   build-portable:
     name: Build portable zip (Windows)
     runs-on: windows-latest
@@ -117,7 +189,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub release
-    needs: [build-installer, build-portable]
+    needs: [build-installer, build-portable, build-macos]
     runs-on: ubuntu-latest
     steps:
       - name: Get version from tag
@@ -141,32 +213,66 @@ jobs:
           name: windows-portable
           path: ./release-files/portable
 
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-universal
+          path: ./release-files/macos
+
       - name: List files
         run: find ./release-files -type f
 
       - name: Create latest.json for auto-updater
         run: |
+          set -euo pipefail
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           VERSION_NUM="${VERSION#v}"
+          BASE="https://github.com/${{ github.repository }}/releases/download/${VERSION}"
 
-          EXE_FILE=$(find ./release-files/installer -name "*.exe" ! -name "*.sig" | head -1)
-          EXE_NAME=$(basename "$EXE_FILE")
-          SIG_FILE="${EXE_FILE}.sig"
-          SIGNATURE=$(cat "$SIG_FILE")
+          PLATFORMS='{}'
 
-          cat > ./release-files/latest.json << EOF
-          {
-            "version": "${VERSION_NUM}",
-            "notes": "Release ${VERSION}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "${SIGNATURE}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${VERSION}/${EXE_NAME}"
-              }
-            }
-          }
-          EOF
+          # The product name contains spaces, and GitHub replaces every space in
+          # a release asset's filename with a dot when it stores it. The URL in
+          # this manifest has to match what GitHub actually serves, not the
+          # local filename, or the updater downloads a 404.
+          asset_url() { echo "${BASE}/$(basename "$1" | tr ' ' '.')"; }
+
+          # --- Windows -------------------------------------------------------
+          EXE_FILE=$(find ./release-files/installer -name "*.exe" ! -name "*.sig" 2>/dev/null | head -1 || true)
+          if [ -n "$EXE_FILE" ] && [ -f "${EXE_FILE}.sig" ]; then
+            PLATFORMS=$(jq -n \
+              --argjson p "$PLATFORMS" \
+              --arg sig "$(cat "${EXE_FILE}.sig")" \
+              --arg url "$(asset_url "$EXE_FILE")" \
+              '$p + {"windows-x86_64": {signature: $sig, url: $url}}')
+          else
+            echo "::warning title=No Windows updater entry::Missing .exe or its .sig; Windows installs will not see this update."
+          fi
+
+          # --- macOS ---------------------------------------------------------
+          # One universal .app.tar.gz serves both architectures. All three keys
+          # point at it so the updater resolves whichever target string the
+          # installed build reports.
+          MAC_FILE=$(find ./release-files/macos -name "*.app.tar.gz" 2>/dev/null | head -1 || true)
+          if [ -n "$MAC_FILE" ] && [ -f "${MAC_FILE}.sig" ]; then
+            PLATFORMS=$(jq -n \
+              --argjson p "$PLATFORMS" \
+              --arg sig "$(cat "${MAC_FILE}.sig")" \
+              --arg url "$(asset_url "$MAC_FILE")" \
+              '$p + {"darwin-universal": {signature: $sig, url: $url},
+                     "darwin-aarch64":  {signature: $sig, url: $url},
+                     "darwin-x86_64":   {signature: $sig, url: $url}}')
+          else
+            echo "::warning title=No macOS updater entry::Missing .app.tar.gz or its .sig; macOS installs will not see this update."
+          fi
+
+          jq -n \
+            --arg version "$VERSION_NUM" \
+            --arg notes "Release ${VERSION}" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson platforms "$PLATFORMS" \
+            '{version: $version, notes: $notes, pub_date: $pub_date, platforms: $platforms}' \
+            > ./release-files/latest.json
 
           cat ./release-files/latest.json
 
@@ -181,6 +287,9 @@ jobs:
             ./release-files/installer/**/*.msi
             ./release-files/installer/**/*.sig
             ./release-files/portable/*.zip
+            ./release-files/macos/**/*.dmg
+            ./release-files/macos/**/*.app.tar.gz
+            ./release-files/macos/**/*.app.tar.gz.sig
             ./release-files/latest.json
           body: |
             ## Satisfactory Layout Tool ${{ steps.get_version.outputs.VERSION }}
@@ -201,6 +310,15 @@ jobs:
             3. Double-click `SatisfactoryLayoutTool.exe` inside the extracted folder
             4. The app opens in your browser — keep the launcher window open while using it
 
+            **Option C: macOS**
+            1. Download the `.dmg` — one file covers both Apple Silicon and Intel Macs
+            2. Open it and drag the app into Applications
+            3. On first launch, **right-click the app and choose *Open*** (double-clicking
+               will show "cannot be verified" or "is damaged" instead). You only need to
+               do this once.
+
+            Full macOS notes → [docs/MACOS.md](https://github.com/${{ github.repository }}/blob/main/docs/MACOS.md)
+
             No account, no key, no internet connection required after install. 🎉
 
             ### 🛠️ For Developers
@@ -214,6 +332,8 @@ jobs:
             | `*.exe` | Windows installer (NSIS) — registers in Start Menu, supports auto-update |
             | `*.msi` | Windows installer (MSI) — for IT-managed deployments |
             | `*-windows.zip` | Portable build — no install, runs in your browser |
+            | `*.dmg` | macOS installer (universal: Apple Silicon + Intel) |
+            | `*.app.tar.gz` | macOS auto-update payload — not for manual download |
             | `latest.json` | Auto-updater manifest — used by installed apps to check for updates |
             | `*.sig` | Cryptographic signatures for the installers |
 

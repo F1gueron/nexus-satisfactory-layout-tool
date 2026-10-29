@@ -1,0 +1,63 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Satisfactory Layout Tool",
+  "version": "2.0.0",
+  "identifier": "com.handleconsolidated.satisfactory-layout-tool",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:5174",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Satisfactory Layout Tool",
+        "width": 1600,
+        "height": 900,
+        "minWidth": 1200,
+        "minHeight": 800,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "titleBarStyle": "Visible",
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": ["appstore"]
+    },
+    "macOSPrivateApi": false
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "createUpdaterArtifacts": false,
+    "copyright": "Copyright (C) 2026 Austin Handle. AGPL-3.0-or-later.",
+    "category": "Productivity",
+    "shortDescription": "Multi-floor factory layout planner for Satisfactory",
+    "longDescription": "A high-performance, multi-floor factory layout planner for Satisfactory. Plan conveyors, pipes, railways, powerlines and foundations on a fast 2D canvas backed by a native Rust core, with a full production simulation.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "macOS": {
+      "entitlements": "./entitlements.appstore.plist",
+      "exceptionDomain": "",
+      "frameworks": [],
+      "minimumSystemVersion": "12.0",
+      "providerShortName": null,
+      "signingIdentity": null
+    }
+  },
+  "plugins": {
+    "fs": {
+      "requireLiteralLeadingDot": false
+    },
+    "dialog": null,
+    "os": {}
+  }
+}

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Entitlements for the MAC APP STORE variant, used with
+	  tauri.appstore.conf.json.
+
+	  The App Sandbox is mandatory for App Store review, and it is far more
+	  restrictive than the Hardened Runtime used for direct downloads. Two
+	  entitlements present in entitlements.plist are deliberately absent here
+	  because Apple rejects them in sandboxed submissions:
+
+	    - com.apple.security.cs.disable-library-validation
+	    - com.apple.security.cs.allow-unsigned-executable-memory
+
+	  If wgpu fails to initialise Metal under the sandbox, prefer narrowing the
+	  graphics code over re-adding those two keys.
+
+	  See docs/MACOS.md for the full submission walkthrough.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- WKWebView's JavaScript JIT. Permitted inside the sandbox. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+
+	<!-- The web view talks to the Rust core over 127.0.0.1:5175, so the
+	     sandbox needs both halves of the loopback connection. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<key>com.apple.security.network.server</key>
+	<true/>
+
+	<!-- Sandboxed apps may only touch paths the user picked in an open/save
+	     dialog. This is what keeps layout import/export working. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
+	<!-- Lets the app reopen recent layouts across launches without
+	     re-prompting for each file. -->
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+</dict>
+</plist>

@@ -82,12 +82,20 @@ async fn get_performance_stats(
 #[cfg(feature = "tauri-mode")]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_process::init());
+
+    // The Mac App Store rejects apps that update themselves, so the updater is
+    // compiled out of App Store builds (--no-default-features --features
+    // appstore-mode). The frontend's update check is already fault-tolerant, so
+    // its absence degrades quietly rather than erroring.
+    #[cfg(feature = "self-updater")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             // Test commands
             test_rust_connection,

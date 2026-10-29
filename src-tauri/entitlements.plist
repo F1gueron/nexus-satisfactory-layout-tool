@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Entitlements for DIRECT DISTRIBUTION (.dmg downloaded from GitHub Releases).
+
+	  This build uses the Hardened Runtime, which is what Apple's notary
+	  service requires. It is deliberately NOT sandboxed: the App Sandbox is
+	  only mandatory for the Mac App Store, and enabling it here would break
+	  the local HTTP bridge and arbitrary-path save/load.
+
+	  For the App Store variant see entitlements.appstore.plist.
+	-->
+
+	<!-- WKWebView runs JavaScript through a JIT compiler. Without these the
+	     web view crashes on launch under the Hardened Runtime. -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+
+	<!-- wgpu loads Metal and system graphics drivers at runtime. -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+
+	<!-- Outbound: update checks against GitHub. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+
+	<!-- Inbound: the Rust core serves the HTTP bridge on 127.0.0.1:5175
+	     and the web view connects to it. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+</dict>
+</plist>
