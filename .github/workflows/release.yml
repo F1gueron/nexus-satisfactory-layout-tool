@@ -93,12 +93,14 @@ jobs:
       # Builds one binary that runs natively on both Apple Silicon and Intel,
       # so there is a single .dmg for users to choose from.
       #
-      # Signing and notarization are driven entirely by the secrets below. With
-      # none of them set the job still succeeds and produces a working but
-      # UNSIGNED .dmg, which Gatekeeper will block on first launch until the
-      # user right-click-opens it (see docs/MACOS.md). Set the Apple secrets to
-      # get a .dmg that opens with a normal double-click.
-      - name: Build Tauri app (universal)
+      # Two mutually exclusive steps, because an absent secret arrives as an
+      # empty string rather than an unset variable, and Tauri reads a *defined*
+      # APPLE_CERTIFICATE as "signing was requested" — then dies with "failed to
+      # import keychain certificate" trying to import nothing. The env block
+      # cannot express "omit this key", so the choice is made with `if:`
+      # instead.
+      - name: Build Tauri app (universal, signed)
+        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
         uses: tauri-apps/tauri-action@v0
         with:
           args: --config src-tauri/tauri.macos.conf.json --target universal-apple-darwin
@@ -116,6 +118,20 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build Tauri app (universal, unsigned)
+        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
+        uses: tauri-apps/tauri-action@v0
+        with:
+          args: --config src-tauri/tauri.macos.conf.json --target universal-apple-darwin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Warn that the release is unsigned
+        if: ${{ secrets.APPLE_CERTIFICATE == '' }}
+        run: echo "::warning title=Unsigned macOS release::This .dmg is unsigned, so Gatekeeper will block it on first launch and users must right-click the app and choose Open. Set the APPLE_* secrets (docs/MACOS.md) before publishing a release you expect people to install."
 
       - name: Report signing status
         run: |

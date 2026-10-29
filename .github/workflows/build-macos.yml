@@ -68,6 +68,31 @@ jobs:
       - name: Build universal .dmg
         run: |
           set -euo pipefail
+
+          # An absent secret becomes an empty string rather than an unset
+          # variable, and Tauri treats a *defined* APPLE_CERTIFICATE as "signing
+          # was requested" — then fails with "failed to import keychain
+          # certificate" trying to import nothing. So the Apple variables are
+          # received under SECRET_* names and only exported under the names
+          # Tauri reads when they actually carry a value.
+          if [ -n "${SECRET_APPLE_CERTIFICATE:-}" ]; then
+            echo "Apple certificate present — building signed"
+            export APPLE_CERTIFICATE="$SECRET_APPLE_CERTIFICATE"
+            export APPLE_CERTIFICATE_PASSWORD="${SECRET_APPLE_CERTIFICATE_PASSWORD:-}"
+            export APPLE_SIGNING_IDENTITY="${SECRET_APPLE_SIGNING_IDENTITY:-}"
+            export KEYCHAIN_PASSWORD="${SECRET_KEYCHAIN_PASSWORD:-}"
+            if [ -n "${SECRET_APPLE_ID:-}" ] && [ -n "${SECRET_APPLE_PASSWORD:-}" ] && [ -n "${SECRET_APPLE_TEAM_ID:-}" ]; then
+              export APPLE_ID="$SECRET_APPLE_ID"
+              export APPLE_PASSWORD="$SECRET_APPLE_PASSWORD"
+              export APPLE_TEAM_ID="$SECRET_APPLE_TEAM_ID"
+              echo "Notarization credentials present — will notarize"
+            else
+              echo "::warning title=Signed but not notarized::APPLE_CERTIFICATE is set but the notarization credentials (APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID) are not. Gatekeeper still blocks a signed-but-unnotarized app. Set all of them or none."
+            fi
+          else
+            echo "::warning title=Unsigned build::No APPLE_CERTIFICATE secret, so the .dmg will be unsigned. It installs and runs, but users must right-click the app and choose Open on first launch. See docs/MACOS.md."
+          fi
+
           if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
             npm run tauri:build:macos:universal
           else
@@ -89,15 +114,16 @@ jobs:
           # Same secret the release workflow uses.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Apple signing is optional here. Unset secrets produce a working
-          # unsigned build; see docs/MACOS.md for what that means for users.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Deliberately SECRET_*-prefixed: see the comment in the script above.
+          # Passing these under their real names would make an absent secret
+          # look to Tauri like a request to sign with an empty certificate.
+          SECRET_APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          SECRET_APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          SECRET_APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          SECRET_KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          SECRET_APPLE_ID: ${{ secrets.APPLE_ID }}
+          SECRET_APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          SECRET_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Verify the bundle
         run: |
