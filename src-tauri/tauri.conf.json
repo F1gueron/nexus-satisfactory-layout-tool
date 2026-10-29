@@ -19,16 +19,7 @@
         "minHeight": 800,
         "resizable": true,
         "fullscreen": false,
-        "center": true,
-        "webPreferences": {
-          "additionalBrowserArgs": [
-            "--enable-gpu-rasterization",
-            "--enable-oop-rasterization",
-            "--enable-hardware-acceleration",
-            "--enable-accelerated-2d-canvas",
-            "--disable-software-rasterizer"
-          ]
-        }
+        "center": true
       }
     ],
     "security": {
