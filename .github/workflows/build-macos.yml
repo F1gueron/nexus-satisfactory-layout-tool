@@ -1,0 +1,124 @@
+name: Build macOS app
+
+# Produces an installable .dmg as a downloadable artifact WITHOUT publishing a
+# release. Use this to get a Mac build on demand, and to catch macOS-only
+# compile failures (Metal/wgpu, objc crates) that a Linux or Windows job cannot
+# surface.
+#
+# Releases are a separate thing: .github/workflows/release.yml runs on a version
+# tag and publishes to the Releases page.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-macos.yml'
+  push:
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-macos.yml'
+
+concurrency:
+  group: build-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build .dmg (universal)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: macos-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: macos-cargo-
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build universal .dmg
+        run: npm run tauri:build:macos:universal
+        env:
+          # Signing is optional here. Unset secrets produce a working unsigned
+          # build; see docs/MACOS.md for what that means for users.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify the bundle
+        run: |
+          set -euo pipefail
+          BUNDLE=src-tauri/target/universal-apple-darwin/release/bundle
+          APP=$(find "$BUNDLE/macos" -maxdepth 1 -name '*.app' | head -1)
+          DMG=$(find "$BUNDLE/dmg" -maxdepth 1 -name '*.dmg' | head -1)
+
+          [ -n "$APP" ] || { echo "::error::No .app bundle was produced"; exit 1; }
+          [ -n "$DMG" ] || { echo "::error::No .dmg was produced"; exit 1; }
+
+          BIN="$APP/Contents/MacOS/$(basename "$APP" .app)"
+          [ -f "$BIN" ] || BIN=$(find "$APP/Contents/MacOS" -type f -perm +111 | head -1)
+
+          echo "### macOS build" >> $GITHUB_STEP_SUMMARY
+
+          # A universal build must carry both slices, or half the users get an
+          # app that cannot launch.
+          ARCHS=$(lipo -archs "$BIN")
+          echo "Architectures: $ARCHS"
+          echo "- Architectures: \`$ARCHS\`" >> $GITHUB_STEP_SUMMARY
+          case "$ARCHS" in
+            *arm64*) ;;
+            *) echo "::error::arm64 slice missing — Apple Silicon Macs cannot run this"; exit 1 ;;
+          esac
+          case "$ARCHS" in
+            *x86_64*) ;;
+            *) echo "::error::x86_64 slice missing — Intel Macs cannot run this"; exit 1 ;;
+          esac
+
+          echo "- Size: $(du -h "$DMG" | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "- Minimum macOS: $(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist" 2>/dev/null || echo unknown)" >> $GITHUB_STEP_SUMMARY
+
+          if spctl -a -vvv -t install "$APP" 2>/dev/null; then
+            echo "- Gatekeeper: **accepted** — opens with a normal double-click" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Gatekeeper: **not accepted** (unsigned). Users must right-click the app and choose *Open* on first launch, or run:" >> $GITHUB_STEP_SUMMARY
+            echo '  ```' >> $GITHUB_STEP_SUMMARY
+            echo '  xattr -cr "/Applications/Satisfactory Layout Tool.app"' >> $GITHUB_STEP_SUMMARY
+            echo '  ```' >> $GITHUB_STEP_SUMMARY
+            echo "  Set the APPLE_* secrets to remove this step (docs/MACOS.md)." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload .dmg
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 30

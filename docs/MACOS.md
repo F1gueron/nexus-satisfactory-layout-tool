@@ -23,23 +23,27 @@ separate, slower track with a licensing problem to resolve first — see
 
 ## 1. Getting the `.dmg`
 
-### From CI (no Mac required)
+### On your own Mac — the quickest path
 
-Pushing a version tag runs the `Build .dmg (macOS universal)` job and attaches
-the result to the GitHub release:
+One command. It checks the prerequisites, explains exactly what is missing if
+something is, and prints where the `.dmg` ended up:
 
 ```bash
-git tag v2.0.1 && git push origin v2.0.1
+bash scripts/build-macos.sh
 ```
 
-You can also run the workflow by hand from the Actions tab via
-**workflow_dispatch**, which is the cheaper way to check that the macOS job is
-healthy without publishing anything.
+Add `--native` to build only for the Mac you are sitting at, which is
+noticeably faster than a universal build:
 
-The job builds for `universal-apple-darwin`, so one `.dmg` runs natively on
-both Apple Silicon and Intel. There is no longer a separate `x64` download.
+```bash
+bash scripts/build-macos.sh --native
+```
 
-### On your own Mac
+You need Xcode command line tools (`xcode-select --install`), Node 18+ and
+Rust. The first build compiles the whole Rust core and takes a while; later
+builds reuse the cache.
+
+The equivalent manual steps, if you prefer them:
 
 ```bash
 npm ci
@@ -50,8 +54,34 @@ npm run tauri:build:macos:universal
 The `.dmg` lands in
 `src-tauri/target/universal-apple-darwin/release/bundle/dmg/`.
 
-To build only for the Mac you are sitting at, which is quicker, use
-`npm run tauri:build:macos` instead.
+### From CI, without a Mac
+
+> **Check Actions is enabled first.** GitHub disables Actions by default on
+> forked repositories, and this repository is a fork — so no workflow here has
+> ever run. Turn it on under *Settings → Actions → General*, or with the
+> "I understand my workflows, go ahead and enable them" button on the Actions
+> tab. Until then neither of the workflows below can produce anything.
+
+Two separate workflows, deliberately:
+
+- **`build-macos.yml`** — builds a universal `.dmg` and uploads it as a
+  downloadable artifact, and **publishes nothing**. Runs on `workflow_dispatch`
+  (Actions tab → *Build macOS app* → *Run workflow*), and automatically on
+  pushes and pull requests that touch `src/`, `src-tauri/` or the manifests.
+  This is how you get a Mac build on demand, and it is what catches
+  macOS-only compile failures — Metal, `wgpu`, the `objc` crates — that a Linux
+  or Windows job cannot surface. It verifies the bundle really contains both
+  the `arm64` and `x86_64` slices, and reports the Gatekeeper verdict in the
+  run summary.
+- **`release.yml`** — runs on a version tag and publishes to the Releases page,
+  macOS included:
+
+```bash
+git tag v2.0.1 && git push origin v2.0.1
+```
+
+Both build for `universal-apple-darwin`, so one `.dmg` runs natively on both
+Apple Silicon and Intel. There is no longer a separate `x64` download.
 
 ---
 

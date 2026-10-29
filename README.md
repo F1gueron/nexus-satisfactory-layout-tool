@@ -75,6 +75,8 @@ Open <http://localhost:5174>. Hot-reload on both frontend and Rust backend.
 
 Requires [Node 20+](https://nodejs.org/) and [Rust 1.77+](https://rustup.rs/). Full build guide → [docs/BUILD.md](docs/BUILD.md)
 
+On a Mac, `bash scripts/build-macos.sh` builds a native `.dmg` in one step → [docs/MACOS.md](docs/MACOS.md)
+
 </td>
 </tr>
 </table>

@@ -28,6 +28,8 @@
     "tauri:build:macos": "tauri build --config src-tauri/tauri.macos.conf.json",
     "tauri:build:macos:universal": "tauri build --config src-tauri/tauri.macos.conf.json --target universal-apple-darwin",
     "tauri:build:appstore": "tauri build --config src-tauri/tauri.appstore.conf.json --target universal-apple-darwin --no-default-features --features appstore-mode",
+    "macos": "bash scripts/build-macos.sh",
+    "macos:native": "bash scripts/build-macos.sh --native",
     "macos:appstore": "bash scripts/build-macos-appstore.sh",
     "tauri:build:linux": "tauri build --config src-tauri/tauri.linux.conf.json",
     "build:all": "node scripts/build-all-platforms.js",
