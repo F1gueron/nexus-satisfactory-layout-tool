@@ -63,12 +63,30 @@ else
   bash scripts/prebuild-standalone-server.sh native
 fi
 
+# tauri.macos.conf.json enables createUpdaterArtifacts, so the bundler tries to
+# sign an update package and refuses to build without TAURI_SIGNING_PRIVATE_KEY.
+# A build for your own use needs no update artifacts, so drop them rather than
+# requiring you to hold a signing key. Uses node (already a prerequisite above)
+# instead of jq, which is not installed on a stock macOS.
+CONFIG="src-tauri/tauri.macos.conf.json"
+if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+  step "No updater signing key present — building without update artifacts"
+  echo "    (the app itself is unaffected; it just won't ship an auto-update payload)"
+  CONFIG="src-tauri/tauri.macos.local.conf.json"
+  node -e '
+    const fs = require("fs");
+    const c = JSON.parse(fs.readFileSync("src-tauri/tauri.macos.conf.json", "utf8"));
+    c.bundle.createUpdaterArtifacts = false;
+    fs.writeFileSync("src-tauri/tauri.macos.local.conf.json", JSON.stringify(c, null, 2));
+  '
+fi
+
 step "Building — the first build compiles the Rust core and takes a while"
 if [ "$UNIVERSAL" = "1" ]; then
-  npm run tauri:build:macos:universal
+  npx tauri build --config "$CONFIG" --target universal-apple-darwin
   BUNDLE="src-tauri/target/universal-apple-darwin/release/bundle"
 else
-  npm run tauri:build:macos
+  npx tauri build --config "$CONFIG"
   BUNDLE="src-tauri/target/release/bundle"
 fi
 
